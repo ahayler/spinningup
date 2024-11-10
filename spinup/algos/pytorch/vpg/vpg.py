@@ -43,7 +43,7 @@ class VPGBuffer:
         """
         Call this at the end of a trajectory, or when one gets cut off
         by an epoch ending. This looks back in the buffer to where the
-        trajectory started, and uses rewards and value estimates from
+        trajectory started, and uses rewards and value estimat from
         the whole trajectory to compute advantage estimates with GAE-Lambda,
         as well as compute the rewards-to-go for each state, to use as
         the targets for the value function.
@@ -290,7 +290,7 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
 
             if terminal or epoch_ended:
                 if epoch_ended and not(terminal):
-                    print('Warning: trajectory cut off by epoch at %d steps.'%ep_len, flush=True)
+                    print('Warning: trajectory cut off by epoch at %d steps.'%ep_len, flush=    True)
                 # if trajectory didn't reach terminal state, bootstrap value target
                 if timeout or epoch_ended:
                     _, v, _ = ac.step(torch.as_tensor(o, dtype=torch.float32))
@@ -301,7 +301,6 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
                     # only save EpRet / EpLen if trajectory finished
                     logger.store(EpRet=ep_ret, EpLen=ep_len)
                 o, ep_ret, ep_len = env.reset(), 0, 0
-
 
         # Save model
         if (epoch % save_freq == 0) or (epoch == epochs-1):
@@ -328,18 +327,18 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='HalfCheetah-v2')
+    parser.add_argument('--env', type=str, default='CartPole-v0') #'HalfCheetah-v2' (does not work because MujoCo-py doesn't)
     parser.add_argument('--hid', type=int, default=64)
     parser.add_argument('--l', type=int, default=2)
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--cpu', type=int, default=4)
     parser.add_argument('--steps', type=int, default=4000)
-    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--epochs', type=int, default=10) # 50
     parser.add_argument('--exp_name', type=str, default='vpg')
     args = parser.parse_args()
 
-    mpi_fork(args.cpu)  # run parallel code with mpi
+    #mpi_fork(args.cpu)  # run parallel code with mpi
 
     from spinup.utils.run_utils import setup_logger_kwargs
     logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
