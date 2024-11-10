@@ -327,15 +327,15 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='CartPole-v0') #'HalfCheetah-v2' (does not work because MujoCo-py doesn't)
+    parser.add_argument('--env', type=str, default='LunarLander-v2') #'HalfCheetah-v2' (does not work because MujoCo-py doesn't)
     parser.add_argument('--hid', type=int, default=64)
     parser.add_argument('--l', type=int, default=2)
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--cpu', type=int, default=4)
     parser.add_argument('--steps', type=int, default=4000)
-    parser.add_argument('--epochs', type=int, default=10) # 50
-    parser.add_argument('--exp_name', type=str, default='vpg')
+    parser.add_argument('--epochs', type=int, default=400) # 50
+    parser.add_argument('--exp_name', type=str, default='vpg-lunar-lander')
     args = parser.parse_args()
 
     #mpi_fork(args.cpu)  # run parallel code with mpi

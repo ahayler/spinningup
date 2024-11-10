@@ -7,7 +7,7 @@ from spinup.algos.reimplemented.utils import Logger, setup_logger_kwargs
 
 from itertools import accumulate
 
-from spinup.algos.reimplemented.vpg.core import _to_tensor, MLPActorCritic
+from spinup.algos.reimplemented.vpg.core import _to_tensor, MLPActorCritic, CategoricalActorCritic
 
 
 def calculate_rewards_to_go(returns: torch.tensor, gamma: float, last_value: float=0) -> torch.tensor:
@@ -26,7 +26,7 @@ def calculate_rewards_to_go(returns: torch.tensor, gamma: float, last_value: flo
 def generate_trajectories(
         env: gym.Env,
         steps_per_epoch: int,
-        actor: MLPActorCritic,
+        actor: [MLPActorCritic, CategoricalActorCritic],
         gamma: float,
         obs_dim: int
 ) -> dict:
@@ -108,12 +108,13 @@ def basic_vpg(
         logger_kwargs: A dictionary of keyword arguments to pass to the logger.
     """
 
+    env = env_fn()
+
     # Set the random states
     if seed is not None:
-        np.random.seed(42)
-        torch.manual_seed(42)
-
-    env = env_fn()
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        env.seed(seed)
 
     # Initialize the actor critic
     actor = MLPActorCritic(num_hidden_layers * [hidden_size], env.action_space, env.observation_space)
@@ -155,14 +156,14 @@ def basic_vpg(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", type=str, default="CartPole-v0")
+    parser.add_argument("--env", type=str, default="LunarLander-v2")
     parser.add_argument("--num_hidden_layers", type=int, default=2)
     parser.add_argument("--hidden_size", type=int, default=64)
     parser.add_argument("--steps_per_epoch", type=int, default=4000)
     parser.add_argument("--num_epochs", type=int, default=800)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--exp_name", type=str, default="basic-vpg")
+    parser.add_argument("--exp_name", type=str, default="basic-vpg-lunar-lander")
     args = parser.parse_args()
 
     # set up logger kwargs

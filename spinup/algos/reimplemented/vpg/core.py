@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from torch.distributions.categorical import Categorical
+from torch.distributions.normal import Normal
 
 from gym.spaces import Box, Discrete
 
@@ -28,7 +29,7 @@ class MLPActorCritic(nn.Module):
         super().__init__()
 
         if isinstance(action_space, Box):
-            NotImplemented
+            self.actor = GaussianActorCritic(hidden_sizes, action_space, observation_space, activation)
         elif isinstance(action_space, Discrete):
             self.actor = CategoricalActorCritic(hidden_sizes, action_space, observation_space, activation)
 
@@ -44,6 +45,19 @@ class GaussianActorCritic(nn.Module):
     def __init__(self, hidden_sizes, action_space, observation_space, activation):
         super().__init__()
 
+        act_dim = action_space.shape[0]
+
+        # One advantage of using log is that our parameters can be unbounded
+        self.log_std = nn.Parameter(-0.5 * torch.ones(act_dim, dtype=torch.float32), requires_grad=True)
+
+        self.mu_net = mlp(sizes=[observation_space.shape[0]] + hidden_sizes + [act_dim], activation=activation)
+
+    def forward(self, obs):
+        mu = self.mu_net(_to_tensor(obs))
+
+        return Normal(mu, self.log_std.exp())
+
+
 
 class CategoricalActorCritic(nn.Module):
     def __init__(self, hidden_sizes, action_space, observation_space, activation):
@@ -53,7 +67,3 @@ class CategoricalActorCritic(nn.Module):
 
     def forward(self, obs):
         return Categorical(logits=self.logit_net(obs))
-
-    def act(self, obs):
-        # For now, I just implemented this to be compatible with the test_policy script
-        return self.forward(obs).sample().numpy()
