@@ -5,7 +5,9 @@ import os
 import warnings
 import torch
 from pathlib import Path
-
+from itertools import accumulate
+import logging
+import sys
 
 def setup_logger_kwargs(exp_name: str, seed: int=None):
 
@@ -23,8 +25,24 @@ class Logger:
     """
     def __init__(self, output_dir):
         self.output_dir = output_dir
-
         os.makedirs(self.output_dir, exist_ok=True)
+
+        # set up logger
+        self.logger = logging.getLogger("training_logger")
+        self.logger.setLevel(logging.INFO)
+
+        console_handler = logging.StreamHandler(stream=sys.stdout)
+        file_handler = logging.FileHandler(self.output_dir / 'run.log')
+
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        console_handler.setFormatter(formatter)
+        file_handler.setFormatter(formatter)
+
+        self.logger.addHandler(console_handler)
+        self.logger.addHandler(file_handler)
+
+    def info(self, msg: str):
+        self.logger.info(msg)
 
     def save_state(self, state_dict: dict, iteration: int=None):
         if proc_id() == 0:
@@ -65,4 +83,6 @@ class Logger:
     def setup_pytorch_saver_elements(self, elements):
         self.pytorch_saver_elements = elements
 
-
+def discounted_cumsum(values: list, discount_factor: float) -> list:
+    # x is the previously accumulated sum; y is the element at the current index
+    return list(accumulate(values[::-1], lambda x, y: discount_factor * x + y))[::-1]
