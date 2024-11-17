@@ -2,8 +2,9 @@ import torch
 from torch import nn
 from torch.distributions.categorical import Categorical
 from torch.distributions.normal import Normal
+import numpy as np
 
-from gym.spaces import Box, Discrete
+from gymnasium.spaces import Box, Discrete
 
 
 def _to_tensor(x):
@@ -54,7 +55,7 @@ class MLPActorCritic(nn.Module):
 
     def act(self, obs):
         # For now, I just implemented this to be compatible with the test_policy script
-        return self.actor.forward(obs).sample().numpy()
+        return self.actor.get_distribution(obs).sample().numpy()
 
 
 class GaussianActorCritic(Actor):
@@ -74,7 +75,7 @@ class GaussianActorCritic(Actor):
         return Normal(mu, self.log_std.exp())
 
     def log_prob_from_distribution(self, dist, act):
-        return dist.log_prob(_to_tensor(act)).sum(dim=-1) # TODO: Understand why we actually need the sum
+        return dist.log_prob(_to_tensor(act)).sum(dim=-1) # the log prob of the distribution, is the sum of the individual logprobs
 
 class CategoricalActorCritic(Actor):
     def __init__(self, hidden_sizes, action_space, obs_dim, activation):

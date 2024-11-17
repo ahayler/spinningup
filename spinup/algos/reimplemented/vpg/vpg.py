@@ -1,5 +1,6 @@
 import argparse
-import gym
+#import
+import gymnasium as gym
 import numpy as np
 import torch
 import time
@@ -23,7 +24,7 @@ def calculate_rewards_to_go(returns: torch.tensor, gamma: float, last_value: flo
     return torch.as_tensor(rwtg[:-1], dtype=torch.float32)
 
 
-def compute_gae_advantage_estimate(returns: torch.tensor, lam: float, gamma: float, vals: torch.tensor, last_value: float=0) -> torch.tensor:
+def compute_gae_advantage_estimate(returns: torch.tensor, lam: float, gamma: float, vals: torch.tensor, last_value: float=0, normalize=False) -> torch.tensor:
     """
     Calculate the generalized advantage estimate based on the returns, the lambda & gamma hyperparameters and the predictions of our value function.
     """
@@ -34,6 +35,10 @@ def compute_gae_advantage_estimate(returns: torch.tensor, lam: float, gamma: flo
 
     adv = discounted_cumsum(list(deltas), lam*gamma)
 
+    if normalize:
+        adv = np.array(adv)
+        adv = (adv - adv.mean()) / adv.std()
+
     return torch.as_tensor(adv, dtype=torch.float32)
 
 def generate_trajectories(
@@ -43,15 +48,17 @@ def generate_trajectories(
         gamma: float,
         lam: float,
         obs_dim: int,
+        act_dim: int,
         value_func: MLPValueFunction,
 ) -> dict:
     # Makes the code run faster
     with torch.no_grad():
-        observation = _to_tensor(env.reset())
+        observation, _ = env.reset()
+        observation = _to_tensor(observation)
         traj_start_idx = 0
 
         obs = torch.zeros(steps_per_epoch, obs_dim, dtype=torch.float32)
-        acts = torch.zeros(steps_per_epoch, dtype=torch.float32)
+        acts = torch.zeros(steps_per_epoch, act_dim, dtype=torch.float32)
         rewards = torch.zeros(steps_per_epoch, dtype=torch.float32) # rewards (to-go) are used to provide supervision for the advantage function
         returns = torch.zeros(steps_per_epoch, dtype=torch.float32)
         log_probs = torch.zeros(steps_per_epoch, dtype=torch.float32)
@@ -59,22 +66,27 @@ def generate_trajectories(
         adv = torch.zeros(steps_per_epoch, dtype=torch.float32) # the advantage estimates are used to "weigh" the log-probabilities in the loss that supervises the actor-critic
 
         traj_lengths = []
+        episode_returns = []
+        episode_return = 0
 
         # Generate trajectories
         for step in range(steps_per_epoch):
             dist = actor(observation)
             action = dist.sample()
 
-            next_obs, ret, terminated, _ = env.step(action.numpy())
+            next_obs, ret, terminated, _, _ = env.step(action.numpy())
 
             obs[step] = observation
             acts[step] = action
             returns[step] = ret
-            log_probs[step] = dist.log_prob(action)
+            episode_return += ret
+            log_probs[step] = actor.get_log_prob_for_action(observation, action)
 
             if terminated:
                 # Reached terminal state
                 traj_lengths.append(step - traj_start_idx)
+                episode_returns.append(episode_return)
+                episode_return = 0
                 traj_slice = slice(traj_start_idx, step)
 
                 # compute the values using the value function (before the gradient step)
@@ -86,10 +98,11 @@ def generate_trajectories(
                     gamma=gamma,
                     vals=vals[traj_slice],
                     lam=lam,
-                    last_value=0
+                    last_value=0,
+                    normalize=True
                 )
 
-                observation = _to_tensor(env.reset())
+                observation = _to_tensor(env.reset()[0])
                 traj_start_idx = step + 1
 
             elif step == steps_per_epoch - 1:
@@ -100,7 +113,9 @@ def generate_trajectories(
                 dist = actor(_to_tensor(next_obs))
                 action = dist.sample()
 
-                _, last_value, _, _ = env.step(action.numpy())
+                last_value = env.step(action.numpy())[1]
+                episode_return += last_value
+                episode_returns.append(episode_return)
 
                 rewards[traj_slice] = calculate_rewards_to_go(
                     returns=returns[traj_slice],
@@ -112,7 +127,8 @@ def generate_trajectories(
                     gamma=gamma,
                     vals=vals[traj_slice],
                     lam=lam,
-                    last_value=last_value
+                    last_value=last_value,
+                    normalize=True
                 )
             else:
                 observation = _to_tensor(next_obs)
@@ -126,6 +142,7 @@ def generate_trajectories(
         advantages=adv,
         log_probs=log_probs,
         traj_lengths=np.array(traj_lengths),
+        episode_returns=episode_returns,
         values=vals,
     )
 
@@ -137,7 +154,7 @@ def basic_vpg(
         steps_per_epoch: int, num_epochs: int,
         gamma: float,
         lam: float,
-        pol_lr: float=1e-4,
+        pol_lr: float=3e-4,
         val_lr: float=1e-3,
         gradient_steps_val_fn: int=80,
         seed: int=None,
@@ -168,9 +185,10 @@ def basic_vpg(
     if seed is not None:
         np.random.seed(seed)
         torch.manual_seed(seed)
-        env.seed(seed)
+        env.action_space.seed(seed)
 
     obs_dim = env.observation_space.shape[0]
+    act_dim = env.action_space.shape[0]
 
     # Initialize the actor critic
     actor = MLPActorCritic(num_hidden_layers * [hidden_size], env.action_space, obs_dim)
@@ -192,7 +210,8 @@ def basic_vpg(
             actor=actor,
             gamma=gamma,
             lam=lam,
-            obs_dim=env.observation_space.shape[0],
+            obs_dim=obs_dim,
+            act_dim=act_dim,
             value_func=val_func,
         )
 
@@ -201,6 +220,7 @@ def basic_vpg(
         rewards = _res['rewards']
         traj_lengths = _res['traj_lengths']
         actions = _res['actions']
+        episode_returns = _res['episode_returns']
         #log_probs = _res['log_probs']
 
         # Update the actor-critic model (using a singular step)
@@ -209,6 +229,7 @@ def basic_vpg(
         # TODO: Check why no gradients get passed here to the value_function model
         # we compute log_probs again, because the trajectories are generated without gradients (to make it run faster)
         log_probs = actor.get_log_prob_for_action(observations, actions)
+        #loss_pol = - (log_probs * rewards).mean()
         loss_pol = -(log_probs * advantages).mean()
         loss_pol.backward()
         pol_optimizer.step()
@@ -224,16 +245,21 @@ def basic_vpg(
             val_optimizer.step()
 
         loss_val_list = np.array(loss_val_list)
+        episode_returns = np.array(episode_returns)
 
         if epoch % 10 == 0:
             elapsed_seconds = time.time() - start_time
             logger.info("") # makes the logs more readable
             logger.info(f"Epoch: {epoch}, (Time: {int(elapsed_seconds // 60):}:{elapsed_seconds % 60:02.0f})")
             logger.info(f"Mean Rewards: {rewards.mean():.2f}, (Std: {rewards.std():.2f})")
+            logger.info(f"Mean Episode Return: {episode_returns.mean():.2f} (Std: {episode_returns.std():.2f})")
             logger.info(f"Mean Estimated Advantage: {advantages.mean():.2f}, (Std: {advantages.std():.2f})")
             logger.info(f"Mean Value Function Loss: {loss_val_list.mean():.2f}, (Std: {loss_val_list.std():.2f})")
             logger.info(f"Last Value function Loss: {loss_val_list[-1]:.2f}")
-            logger.info(f"Mean Trajectory Length: {traj_lengths.mean():.2f} (Std: {traj_lengths.std():.2f})")
+            if len(traj_lengths) > 0:
+                logger.info(f"Mean Trajectory Length: {traj_lengths.mean():.2f} (Std: {traj_lengths.std():.2f})")
+            else:
+                logger.info(f"Mean Trajectory Length undefined as trajectory lasted entire epoch.")
 
 
     # Save the final model
@@ -242,7 +268,7 @@ def basic_vpg(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", type=str, default="Acrobot-v1")
+    parser.add_argument("--env", type=str, default="HalfCheetah-v5")
     parser.add_argument("--num_hidden_layers", type=int, default=2)
     parser.add_argument("--hidden_size", type=int, default=64)
     parser.add_argument("--steps_per_epoch", type=int, default=4000)
@@ -250,12 +276,11 @@ if __name__ == "__main__":
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--lam", type=float, default=0.95)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--exp_name", type=str, default="test")
+    parser.add_argument("--exp_name", type=str, default="gae-vpg-half-cheetah")
     args = parser.parse_args()
 
     # set up logger kwargs
     logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
-
 
     basic_vpg(
         env_fn=(lambda: gym.make(args.env)),

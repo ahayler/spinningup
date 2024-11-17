@@ -29,7 +29,7 @@ class Logger:
 
         # set up logger
         self.logger = logging.getLogger("training_logger")
-        self.logger.setLevel(logging.INFO)
+        self.logger.setLevel(logging.DEBUG)
 
         console_handler = logging.StreamHandler(stream=sys.stdout)
         file_handler = logging.FileHandler(self.output_dir / 'run.log')
@@ -43,6 +43,9 @@ class Logger:
 
     def info(self, msg: str):
         self.logger.info(msg)
+
+    def debug(self, msg: str):
+        self.logger.debug(msg)
 
     def save_state(self, state_dict: dict, iteration: int=None):
         if proc_id() == 0:

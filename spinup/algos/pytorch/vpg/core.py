@@ -1,6 +1,6 @@
 import numpy as np
 import scipy.signal
-from gym.spaces import Box, Discrete
+from gymnasium.spaces import Box, Discrete
 
 import torch
 import torch.nn as nn
@@ -78,7 +78,6 @@ class MLPCategoricalActor(Actor):
 
 
 class MLPGaussianActor(Actor):
-
     def __init__(self, obs_dim, act_dim, hidden_sizes, activation):
         super().__init__()
         log_std = -0.5 * np.ones(act_dim, dtype=np.float32)
