@@ -83,7 +83,7 @@ class A2CActor(Actor):
         return self.log_prob_from_distribution(self.get_distribution(obs), act)
 
 
-class MLPActorCritic(nn.Module):
+class MLPActor(nn.Module):
     def __init__(self, hidden_sizes, action_space, obs_dim, activation=nn.Tanh):
         super().__init__()
 
@@ -98,7 +98,12 @@ class MLPActorCritic(nn.Module):
     def get_distribution(self, obs):
         return self.actor.get_distribution(obs)
 
-    def get_log_prob_for_action(self, obs, action):
+    def get_entropy(self, obs):
+        dist = self.get_distribution(obs)
+
+        return dist.entropy()
+
+    def get_log_prob_from_action(self, obs, action):
         dist = self.get_distribution(obs)
 
         return self.actor.log_prob_from_distribution(dist, action)

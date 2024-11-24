@@ -8,7 +8,7 @@ from torch import nn
 from tqdm import tqdm
 from spinup.algos.reimplemented.utils import Logger, setup_logger_kwargs, discounted_cumsum, get_act_dim
 
-from spinup.algos.reimplemented.core import _to_tensor, MLPActorCritic, MLPValueFunction
+from spinup.algos.reimplemented.core import _to_tensor, MLPActor, MLPValueFunction
 
 
 def calculate_rewards_to_go(returns: torch.tensor, gamma: float, last_value: float=0) -> torch.tensor:
@@ -187,13 +187,13 @@ def vpg(
     if seed is not None:
         np.random.seed(seed)
         torch.manual_seed(seed)
-        env.action_space.seed(seed)
+        #env.reset(seed=seed) # The seed gets passed the FIRST time the env gets reset and then never again
 
     obs_dim = env.observation_space.shape[0]
     act_dim = get_act_dim(env.action_space)
 
     # Initialize the actor critic
-    actor = MLPActorCritic(num_hidden_layers * [hidden_size], env.action_space, obs_dim)
+    actor = MLPActor(num_hidden_layers * [hidden_size], env.action_space, obs_dim)
     val_func = MLPValueFunction(obs_dim, num_hidden_layers * [hidden_size])
     loss_fn_val = nn.MSELoss()
     pol_optimizer = torch.optim.Adam(actor.parameters(), lr=pol_lr)
@@ -230,9 +230,11 @@ def vpg(
         # before GAE: loss = - (log_probs * rewards).mean()
         # TODO: Check why no gradients get passed here to the value_function model
         # we compute log_probs again, because the trajectories are generated without gradients (to make it run faster)
-        log_probs = actor.get_log_prob_for_action(observations, actions)
-        #loss_pol = - (log_probs * rewards).mean()
-        loss_pol = -(log_probs * advantages).mean()
+        #log_probs = actor.get_log_prob_from_action(observations, actions)
+        dist = actor.get_distribution(observations)
+        log_probs = dist.log_prob(actions)
+        loss_pol = - (log_probs * rewards).mean()
+        #loss_pol = -(log_probs * advantages).mean()
         loss_pol.backward()
         pol_optimizer.step()
 
@@ -270,7 +272,7 @@ def vpg(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", type=str, default="HalfCheetah-v5")
+    parser.add_argument("--env", type=str, default="CartPole-v1")
     parser.add_argument("--num_hidden_layers", type=int, default=2)
     parser.add_argument("--hidden_size", type=int, default=64)
     parser.add_argument("--steps_per_epoch", type=int, default=4000)

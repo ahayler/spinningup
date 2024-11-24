@@ -14,7 +14,8 @@ def a2c(
         env_fn,
         hidden_size: int,
         num_hidden_layers: int,
-        steps_per_epoch: int, num_epochs: int,
+        steps_per_epoch: int,
+        num_epochs: int,
         gamma: float,
         lam: float,
         lr: float=5e-4,
@@ -50,7 +51,7 @@ def a2c(
     if seed is not None:
         np.random.seed(seed)
         torch.manual_seed(seed)
-        env.action_space.seed(seed)
+        env.reset(seed=seed) # The seed gets passed the FIRST time the env gets reset and then never again
 
     obs_dim = env.observation_space.shape[0]
     act_dim = get_act_dim(env.action_space)
