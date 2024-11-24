@@ -8,7 +8,7 @@ from torch import nn
 from tqdm import tqdm
 from spinup.algos.reimplemented.utils import Logger, setup_logger_kwargs, discounted_cumsum, get_act_dim
 
-from spinup.algos.reimplemented.vpg.core import _to_tensor, MLPActorCritic, MLPValueFunction
+from spinup.algos.reimplemented.core import _to_tensor, MLPActorCritic, MLPValueFunction
 
 
 def calculate_rewards_to_go(returns: torch.tensor, gamma: float, last_value: float=0) -> torch.tensor:
