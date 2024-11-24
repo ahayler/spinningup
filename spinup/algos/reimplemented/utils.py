@@ -8,6 +8,7 @@ from pathlib import Path
 from itertools import accumulate
 import logging
 import sys
+from gymnasium.spaces import Box, Discrete
 
 def setup_logger_kwargs(exp_name: str, seed: int=None):
 
@@ -89,3 +90,11 @@ class Logger:
 def discounted_cumsum(values: list, discount_factor: float) -> list:
     # x is the previously accumulated sum; y is the element at the current index
     return list(accumulate(values[::-1], lambda x, y: discount_factor * x + y))[::-1]
+
+def get_act_dim(action_space) -> int:
+    if isinstance(action_space, Box):
+        return action_space.shape[0]
+    elif isinstance(action_space, Discrete):
+        return 1
+    else:
+        raise NotImplementedError

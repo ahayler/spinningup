@@ -6,7 +6,7 @@ import torch
 import time
 from torch import nn
 from tqdm import tqdm
-from spinup.algos.reimplemented.utils import Logger, setup_logger_kwargs, discounted_cumsum
+from spinup.algos.reimplemented.utils import Logger, setup_logger_kwargs, discounted_cumsum, get_act_dim
 
 from spinup.algos.reimplemented.vpg.core import _to_tensor, MLPActorCritic, MLPValueFunction
 
@@ -28,6 +28,8 @@ def compute_gae_advantage_estimate(returns: torch.tensor, lam: float, gamma: flo
     """
     Calculate the generalized advantage estimate based on the returns, the lambda & gamma hyperparameters and the predictions of our value function.
     """
+    assert len(returns) > 0
+
     returns = np.append(returns, last_value)
     vals = np.append(vals.detach(), last_value) # we don't want gradients from the actor-critic to flow to the value function anyways
 
@@ -35,21 +37,19 @@ def compute_gae_advantage_estimate(returns: torch.tensor, lam: float, gamma: flo
 
     adv = discounted_cumsum(list(deltas), lam*gamma)
 
-    if normalize:
-        adv = np.array(adv)
-        adv = (adv - adv.mean()) / adv.std()
+    assert not np.isnan(adv).any() # We do not want any nan values in our advantages
 
     return torch.as_tensor(adv, dtype=torch.float32)
 
 def generate_trajectories(
         env: gym.Env,
         steps_per_epoch: int,
-        actor: [MLPActorCritic],
+        actor: nn.Module,
         gamma: float,
         lam: float,
         obs_dim: int,
         act_dim: int,
-        value_func: MLPValueFunction,
+        value_func: nn.Module,
 ) -> dict:
     # Makes the code run faster
     with torch.no_grad():
@@ -71,7 +71,7 @@ def generate_trajectories(
 
         # Generate trajectories
         for step in range(steps_per_epoch):
-            dist = actor(observation)
+            dist = actor.get_distribution(observation)
             action = dist.sample()
 
             next_obs, ret, terminated, _, _ = env.step(action.numpy())
@@ -80,7 +80,7 @@ def generate_trajectories(
             acts[step] = action
             returns[step] = ret
             episode_return += ret
-            log_probs[step] = actor.get_log_prob_for_action(observation, action)
+            log_probs[step] = actor.get_log_prob_from_action(observation, action)
 
             if terminated:
                 # Reached terminal state
@@ -90,7 +90,7 @@ def generate_trajectories(
                 traj_slice = slice(traj_start_idx, step)
 
                 # compute the values using the value function (before the gradient step)
-                vals[traj_slice] = value_func(obs[traj_slice]).squeeze(1)
+                vals[traj_slice] = value_func.get_value(obs[traj_slice]).squeeze(1)
 
                 rewards[traj_slice] = calculate_rewards_to_go(returns=returns[traj_slice], last_value=0, gamma=gamma)
                 adv[traj_slice] = compute_gae_advantage_estimate(
@@ -103,14 +103,14 @@ def generate_trajectories(
                 )
 
                 observation = _to_tensor(env.reset()[0])
-                traj_start_idx = step + 1
+                traj_start_idx = step
 
             elif step == steps_per_epoch - 1:
                 # Reached end of epoch
                 traj_slice = slice(traj_start_idx, step)
 
                 # get the last value for calculation
-                dist = actor(_to_tensor(next_obs))
+                dist = actor.get_distribution(_to_tensor(next_obs))
                 action = dist.sample()
 
                 last_value = env.step(action.numpy())[1]
@@ -133,6 +133,8 @@ def generate_trajectories(
             else:
                 observation = _to_tensor(next_obs)
 
+    # We normalize the advantage before we return it (this should happen across trajectories vs. within one trajectory)
+    adv = (adv - adv.mean()) / adv.std()
 
     return dict(
         rewards=rewards,
@@ -147,7 +149,7 @@ def generate_trajectories(
     )
 
 
-def basic_vpg(
+def vpg(
         env_fn,
         hidden_size: int,
         num_hidden_layers: int,
@@ -161,7 +163,7 @@ def basic_vpg(
         logger_kwargs=None,
 ):
     """
-    A basic Vanilla Policy Gradient implementation.
+    Vanilla Policy Gradient implementation with normalized generalized advantage estimation.
 
     Args:
         env_fn: A function that returns a gym environment.
@@ -188,7 +190,7 @@ def basic_vpg(
         env.action_space.seed(seed)
 
     obs_dim = env.observation_space.shape[0]
-    act_dim = env.action_space.shape[0]
+    act_dim = get_act_dim(env.action_space)
 
     # Initialize the actor critic
     actor = MLPActorCritic(num_hidden_layers * [hidden_size], env.action_space, obs_dim)
@@ -276,13 +278,13 @@ if __name__ == "__main__":
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--lam", type=float, default=0.95)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--exp_name", type=str, default="gae-vpg-half-cheetah")
+    parser.add_argument("--exp_name", type=str, default="test")
     args = parser.parse_args()
 
     # set up logger kwargs
     logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
 
-    basic_vpg(
+    vpg(
         env_fn=(lambda: gym.make(args.env)),
         hidden_size=args.hidden_size,
         num_hidden_layers=args.num_hidden_layers,

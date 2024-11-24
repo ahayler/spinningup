@@ -32,6 +32,56 @@ class Actor(nn.Module):
     def log_prob_from_distribution(self, dist, act):
         raise NotImplementedError
 
+class A2CActor(Actor):
+    def __init__(self, hidden_sizes, action_space, obs_dim, activation=nn.Tanh):
+        super().__init__()
+
+        self.backbone = MLP([obs_dim] + hidden_sizes, activation)
+        self.val = nn.Linear(hidden_sizes[-1], 1)
+
+        if isinstance(action_space, Box):
+            self.pol = nn.Linear(hidden_sizes[-1], action_space.shape[0])
+            self.log_std = nn.Parameter(-0.5 * torch.ones(action_space.shape[0]), requires_grad=True)
+        elif isinstance(action_space, Discrete):
+            self.pol = nn.Linear(hidden_sizes[-1], action_space.n)
+        else:
+            raise NotImplementedError
+
+    def get_embedding(self, obs):
+        return self.backbone(_to_tensor(obs))
+
+    def get_value(self, obs):
+        return self.val(self.get_embedding(obs))
+
+    def get_distribution(self, obs):
+        pol_vec = self.pol(self.get_embedding(_to_tensor(obs)))
+        if hasattr(self, "log_std"):
+            # continuous case
+            return Normal(pol_vec, self.log_std.exp())
+        else:
+            # categorical/discrete case
+            return Categorical(logits=pol_vec)
+
+    def get_entropy(self, obs):
+        dist = self.get_distribution(obs)
+
+        return dist.entropy()
+
+    def act(self, obs):
+        # For now, I just implemented this to be compatible with the test_policy script
+        return self.get_distribution(obs).sample().numpy()
+
+    def log_prob_from_distribution(self, dist, act):
+        if isinstance(dist, Normal):
+            return dist.log_prob(_to_tensor(act)).sum(-1) # we get a log-prob per component that we then have to sum up
+        elif isinstance(dist, Categorical):
+            return dist.log_prob(_to_tensor(act))
+        else:
+            raise NotImplementedError
+
+    def get_log_prob_from_action(self, obs, act):
+        return self.log_prob_from_distribution(self.get_distribution(obs), act)
+
 
 class MLPActorCritic(nn.Module):
     def __init__(self, hidden_sizes, action_space, obs_dim, activation=nn.Tanh):
@@ -95,5 +145,8 @@ class MLPValueFunction(nn.Module):
 
         self.critic = MLP([obs_dim] + hidden_sizes + [1], activation)
 
-    def forward(self, obs):
+    def get_value(self, obs):
         return self.critic(_to_tensor(obs))
+
+    def forward(self, obs):
+        return self.get_value(obs)
