@@ -230,11 +230,9 @@ def vpg(
         # before GAE: loss = - (log_probs * rewards).mean()
         # TODO: Check why no gradients get passed here to the value_function model
         # we compute log_probs again, because the trajectories are generated without gradients (to make it run faster)
-        #log_probs = actor.get_log_prob_from_action(observations, actions)
-        dist = actor.get_distribution(observations)
-        log_probs = dist.log_prob(actions)
-        loss_pol = - (log_probs * rewards).mean()
-        #loss_pol = -(log_probs * advantages).mean()
+        log_probs = actor.get_log_prob_from_action(observations, actions)
+        loss_pol = -(log_probs * advantages).mean()
+
         loss_pol.backward()
         pol_optimizer.step()
 
@@ -272,7 +270,7 @@ def vpg(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", type=str, default="CartPole-v1")
+    parser.add_argument("--env", type=str, default="HalfCheetah-v5")
     parser.add_argument("--num_hidden_layers", type=int, default=2)
     parser.add_argument("--hidden_size", type=int, default=64)
     parser.add_argument("--steps_per_epoch", type=int, default=4000)

@@ -75,7 +75,9 @@ class A2CActor(Actor):
         if isinstance(dist, Normal):
             return dist.log_prob(_to_tensor(act)).sum(-1) # we get a log-prob per component that we then have to sum up
         elif isinstance(dist, Categorical):
-            return dist.log_prob(_to_tensor(act))
+            assert (len(act.shape) <= 1) | (len(act.shape) == 2 and act.shape[1] == 1)
+
+            return dist.log_prob(_to_tensor(act).reshape(-1))
         else:
             raise NotImplementedError
 
@@ -141,8 +143,14 @@ class CategoricalActorCritic(Actor):
     def get_distribution(self, obs):
         return Categorical(logits=self.logit_net(_to_tensor(obs)))
 
+    def _check_action_dims(self, act):
+        return (len(act.shape) <= 1) | (len(act.shape) == 2 and act.shape[1] == 1)
+
     def log_prob_from_distribution(self, dist, act):
-        return dist.log_prob(_to_tensor(act))
+        assert self._check_action_dims(act)
+
+        # We need the reshape(-1) to prevent shape issues (see tests)
+        return dist.log_prob(_to_tensor(act).reshape(-1))
 
 class MLPValueFunction(nn.Module):
     def __init__(self, obs_dim, hidden_sizes, activation=nn.Tanh):

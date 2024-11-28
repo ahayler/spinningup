@@ -93,6 +93,8 @@ def a2c(
 
         # Actor loss
         log_probs = a2c_actor.get_log_prob_from_action(observations, actions)
+        assert log_probs.shape == advantages.shape # prevent/detect shape issues
+
         actor_pol = - (advantages.detach() * log_probs).mean() # advantages should already be detached
 
         # Value function loss
@@ -135,7 +137,7 @@ def a2c(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", type=str, default="CartPole-v1")
+    parser.add_argument("--env", type=str, default="HalfCheetah-v5")
     parser.add_argument("--num_hidden_layers", type=int, default=2)
     parser.add_argument("--hidden_size", type=int, default=64)
     parser.add_argument("--steps_per_epoch", type=int, default=4000)
