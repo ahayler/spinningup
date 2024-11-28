@@ -90,34 +90,35 @@ def ppo(
         rewards = _res['rewards']
         advantages = _res['advantages']
 
-        # # We first train the actor
-        # for pol_iter in range(train_pol_iters):
-        #     act_optim.zero_grad()
-        #     log_p = actor.get_log_prob_from_action(observations, actions)
-        #     ratio = torch.exp(log_p - log_p_old)
-        #     clamped_adv = torch.clamp(ratio,1 - clip_ratio, 1 + clip_ratio) * advantages
-        #     loss_act = -torch.min(ratio * advantages, clamped_adv).mean()
-        #
-        #     # compute some extra info
-        #     kl = (log_p - log_p_old).mean().item()
-        #     entropy = actor.get_entropy(observations).mean().item()
-        #     clamped = ratio.gt(1 + clip_ratio) | ratio.lt(1 - clip_ratio) # This is not entirely true as we only clamp in the "good" direction
-        #     clamped_ratio = torch.as_tensor(clamped, dtype=torch.float32).mean().item()
-        #
-        #
-        #     # Implement early stopping
-        #     if abs(kl) > 1.5 * target_kl:
-        #         logger.info(f"Broke in epoch {epoch} after {pol_iter} iterations, because of very high KL-divergence.")
-        #         break
-        #
-        #     loss_act.backward()
-        #     act_optim.step()
+        # We first train the actor
+        for pol_iter in range(train_pol_iters):
+            act_optim.zero_grad()
+            log_p = actor.get_log_prob_from_action(observations, actions)
+            assert log_p.shape == log_p_old.shape
+            ratio = torch.exp(log_p - log_p_old)
+            clamped_adv = torch.clamp(ratio,1 - clip_ratio, 1 + clip_ratio) * advantages
+            loss_act = -torch.min(ratio * advantages, clamped_adv).mean()
 
-        act_optim.zero_grad()
-        log_p = actor.get_log_prob_from_action(observations, actions)
-        loss_act = - (log_p * advantages).mean()
-        loss_act.backward()
-        act_optim.step()
+            # compute some extra info
+            kl = (log_p - log_p_old).mean().item()
+            entropy = actor.get_entropy(observations).mean().item()
+            clamped = ratio.gt(1 + clip_ratio) | ratio.lt(1 - clip_ratio) # This is not entirely true as we only clamp in the "good" direction
+            clamped_ratio = torch.as_tensor(clamped, dtype=torch.float32).mean().item()
+
+
+            # Implement early stopping
+            if abs(kl) > 1.5 * target_kl:
+                logger.info(f"Broke in epoch {epoch} after {pol_iter} iterations, because of very high KL-divergence.")
+                break
+
+            loss_act.backward()
+            act_optim.step()
+
+        # act_optim.zero_grad()
+        # log_p = actor.get_log_prob_from_action(observations, actions)
+        # loss_act = - (log_p * advantages).mean()
+        # loss_act.backward()
+        # act_optim.step()
 
 
         # Then we train the value function
@@ -142,9 +143,9 @@ def ppo(
             logger.info(f"Mean Rewards: {rewards.mean():.2f}, (Std: {rewards.std():.2f})")
             logger.info(f"Mean Episode Return: {episode_returns.mean():.2f} (Std: {episode_returns.std():.2f})")
             logger.info(f"Mean Estimated Advantage: {advantages.mean():.2f}, (Std: {advantages.std():.2f})")
-            # logger.info(f"Last KL-divergence: {kl:.2f}")
-            # logger.info(f"Last entropy: {entropy:.2f}")
-            # logger.info(f"Last clamped ratio: {clamped_ratio:.2f}")
+            logger.info(f"Last KL-divergence: {kl:.2f}")
+            logger.info(f"Last entropy: {entropy:.2f}")
+            logger.info(f"Last clamped ratio: {clamped_ratio:.2f}")
             logger.info(f"Mean loss value function: {val_loss_list.mean():.2f}")
             logger.info(f"Last loss value function: {val_loss_list[-1]:.2f}")
             logger.info(f"")
@@ -163,7 +164,7 @@ if __name__ == "__main__":
     parser.add_argument("--env", type=str, default="CartPole-v1")
     parser.add_argument("--num_hidden_layers", type=int, default=2)
     parser.add_argument("--hidden_size", type=int, default=64)
-    parser.add_argument("--steps_per_epoch", type=int, default=1000)
+    parser.add_argument("--steps_per_epoch", type=int, default=4000)
     parser.add_argument("--num_epochs", type=int, default=800)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--lam", type=float, default=0.95)
