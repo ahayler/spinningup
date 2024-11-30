@@ -108,7 +108,7 @@ def ppo(
 
             # Implement early stopping
             if abs(kl) > 1.5 * target_kl:
-                logger.info(f"Broke in epoch {epoch} after {pol_iter} iterations, because of very high KL-divergence.")
+                logger.info(f"Broke in epoch {epoch} after {pol_iter} iterations, because of high KL-divergence.")
                 break
 
             loss_act.backward()
@@ -161,7 +161,7 @@ def ppo(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", type=str, default="CartPole-v1")
+    parser.add_argument("--env", type=str, default="HalfCheetah-v5")
     parser.add_argument("--num_hidden_layers", type=int, default=2)
     parser.add_argument("--hidden_size", type=int, default=64)
     parser.add_argument("--steps_per_epoch", type=int, default=4000)
