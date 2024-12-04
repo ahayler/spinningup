@@ -6,8 +6,8 @@ import torch
 import time
 from tqdm import tqdm
 
-from spinup.algos.reimplemented.core import A2CActor
-from spinup.algos.reimplemented.vpg.vpg import generate_trajectories
+from spinup.algos.reimplemented.on_policy.core import A2CActor
+from spinup.algos.reimplemented.on_policy.vpg.vpg import generate_trajectories
 
 
 def a2c(

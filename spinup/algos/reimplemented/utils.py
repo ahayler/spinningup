@@ -9,6 +9,7 @@ from itertools import accumulate
 import logging
 import sys
 from gymnasium.spaces import Box, Discrete
+from torch import nn
 
 def setup_logger_kwargs(exp_name: str, seed: int=None):
 
@@ -98,3 +99,19 @@ def get_act_dim(action_space) -> int:
         return 1
     else:
         raise NotImplementedError
+
+class MLP(nn.Module):
+    def __init__(self, sizes, activation=nn.Tanh):
+        super().__init__()
+
+        self.layers = nn.ModuleList([nn.Linear(sizes[i], sizes[i+1]) for i in range(len(sizes) - 1)])
+        self.activation = activation()
+
+    def forward(self, x):
+        for layer in self.layers[:-1]:
+            x = self.activation(layer(x))
+
+        return self.layers[-1](x)
+
+def _to_tensor(x):
+    return torch.as_tensor(x, dtype=torch.float32)

@@ -1,5 +1,4 @@
-import pytest
-from spinup.algos.reimplemented.core import MLPActor, A2CActor
+from spinup.algos.reimplemented.on_policy.core import MLPActor, A2CActor
 from torch import nn
 import gymnasium as gym
 import torch

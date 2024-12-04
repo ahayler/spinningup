@@ -1,8 +1,8 @@
 import argparse
 
 from spinup.algos.reimplemented.utils import setup_logger_kwargs, Logger, get_act_dim
-from spinup.algos.reimplemented.vpg.vpg import generate_trajectories
-from spinup.algos.reimplemented.core import MLPActor, MLPValueFunction
+from spinup.algos.reimplemented.on_policy.vpg.vpg import generate_trajectories
+from spinup.algos.reimplemented.on_policy.core import MLPActor, MLPValueFunction
 import gymnasium as gym
 import torch
 import numpy as np
@@ -161,7 +161,7 @@ def ppo(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", type=str, default="HalfCheetah-v5")
+    parser.add_argument("--env", type=str, default="CartPole-v1")
     parser.add_argument("--num_hidden_layers", type=int, default=2)
     parser.add_argument("--hidden_size", type=int, default=64)
     parser.add_argument("--steps_per_epoch", type=int, default=4000)
